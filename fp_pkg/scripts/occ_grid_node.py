@@ -11,7 +11,7 @@ from nav_msgs.msg import OccupancyGrid
 
 from tf_transformations import euler_from_quaternion
 
-from og_process import process_occ_grid
+from fp_pkg.og_process import process_occ_grid
 
 
 # class def for RRT

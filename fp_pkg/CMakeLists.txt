@@ -59,7 +59,6 @@ install(PROGRAMS
 # Install Python executables
 install(PROGRAMS
   scripts/occ_grid_node.py
-  scripts/og_process.py
   DESTINATION lib/${PROJECT_NAME}
 )
 
