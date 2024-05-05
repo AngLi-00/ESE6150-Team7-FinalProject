@@ -10,9 +10,9 @@ from nav_msgs.msg import Odometry
 from nav_msgs.msg import OccupancyGrid
 
 from tf_transformations import euler_from_quaternion
-
 from fp_pkg.og_process import process_occ_grid
 
+import cv2
 
 # class def for RRT
 class OG(Node):
@@ -38,10 +38,11 @@ class OG(Node):
         self.pose_sub_
 
         # Publishers
-        self.viz_og_pub_ = self.create_publisher(OccupancyGrid, '/visualization_og', 10)
+        self.og_pub_ = self.create_publisher(OccupancyGrid, '/og', 10)
 
         # class attributes
-        self.occupancy_grid = np.ones((36, 100)) * -1.0
+        # self.occupancy_grid = np.ones((36, 100)) * -1.0
+        self.occupancy_grid = np.zeros((36, 100), dtype=np.uint8)
         self.lidar_max = 6.0
         self.resolution = 0.1
         self.angle_min = 0.0
@@ -67,8 +68,17 @@ class OG(Node):
 
         self.occupancy_grid = process_occ_grid(self.occupancy_grid, self.resolution, ranges, angles, mr, ma)
 
-        self.visualize_occ_grid()
+        # Dilation
+        dilation_size = 2
+        kernel = np.ones((2 * dilation_size + 1, 2 * dilation_size + 1), np.uint8)
+        self.occupancy_grid = cv2.dilate(self.occupancy_grid.astype(np.uint8), kernel, iterations=1)
+        self.occupancy_grid = self.occupancy_grid.astype(np.int8)
 
+        # print("occ", np.argwhere(self.occupancy_grid == 1))
+        # print("free", np.argwhere(self.occupancy_grid == 0))
+        # print("unknown", np.argwhere(self.occupancy_grid == -1))
+
+        self.occ_grid() # Publish the occupancy grid
 
     def preprocess_lidar(self, ranges):
         """ Preprocess the LiDAR scan array. Expert implementation includes:
@@ -90,19 +100,18 @@ class OG(Node):
         
         return proc_ranges, proc_angles, maxed_ranges, maxed_angles
     
-    def visualize_occ_grid(self):
+    def occ_grid(self):
 
         if self.pose is None:
             return
-        
 
-        viz_og = OccupancyGrid()
-        viz_og.header.frame_id = "map"
+        og = OccupancyGrid()
+        og.header.frame_id = "map"
 
         int_grid = self.occupancy_grid.astype(np.int8)
-        viz_og.data = np.ravel(int_grid, order='C').tolist()
+        og.data = np.ravel(int_grid, order='C').tolist()
 
-        viz_og.info.origin = self.pose
+        og.info.origin = self.pose
         vec_length = math.sqrt((self.occupancy_grid.shape[1] // 2 * self.resolution) ** 2 + 
                                 (self.occupancy_grid.shape[0] // 2 * self.resolution) ** 2)
         
@@ -110,14 +119,15 @@ class OG(Node):
                                      (self.occupancy_grid.shape[1] // 2 * self.resolution))
         
         vec_angle = to_center_angle + self.theta
-        viz_og.info.origin.position.x = self.pose.position.x - vec_length * math.cos(vec_angle)
-        viz_og.info.origin.position.y = self.pose.position.y - vec_length * math.sin(vec_angle)
+        og.info.origin.position.x = self.pose.position.x - vec_length * math.cos(vec_angle)
+        og.info.origin.position.y = self.pose.position.y - vec_length * math.sin(vec_angle)
+        # print("origin:", og.info.origin.position.x, og.info.origin.position.y)
 
-        viz_og.info.width = self.occupancy_grid.shape[1]
-        viz_og.info.height = self.occupancy_grid.shape[0]
-        viz_og.info.resolution = self.resolution
+        og.info.width = self.occupancy_grid.shape[1]
+        og.info.height = self.occupancy_grid.shape[0]
+        og.info.resolution = self.resolution
 
-        self.viz_og_pub_.publish(viz_og)
+        self.og_pub_.publish(og)
 
         return
 
@@ -131,15 +141,13 @@ class OG(Node):
         Returns:
 
         """
-        # print("Pose Callback")
-
         if self.sim:
             quat = pose_msg.pose.pose.orientation
             self.pose = pose_msg.pose.pose
         else:
             quat = pose_msg.pose.orientation
             self.pose = pose_msg.pose
-
+        # print("pose:", self.pose.position.x, self.pose.position.y)
         quat = [quat.x, quat.y, quat.z, quat.w]
         euler = euler_from_quaternion(quat)
         theta = euler[2]
