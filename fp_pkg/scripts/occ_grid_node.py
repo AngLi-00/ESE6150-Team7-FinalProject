@@ -68,15 +68,7 @@ class OG(Node):
 
         self.occupancy_grid = process_occ_grid(self.occupancy_grid, self.resolution, ranges, angles, mr, ma)
 
-        # Dilation
-        dilation_size = 2
-        kernel = np.ones((2 * dilation_size + 1, 2 * dilation_size + 1), np.uint8)
-        self.occupancy_grid = cv2.dilate(self.occupancy_grid.astype(np.uint8), kernel, iterations=1)
-        self.occupancy_grid = self.occupancy_grid.astype(np.int8)
 
-        # print("occ", np.argwhere(self.occupancy_grid == 1))
-        # print("free", np.argwhere(self.occupancy_grid == 0))
-        # print("unknown", np.argwhere(self.occupancy_grid == -1))
 
         self.occ_grid() # Publish the occupancy grid
 
@@ -104,12 +96,19 @@ class OG(Node):
 
         if self.pose is None:
             return
+        
+        # # Dilation
+        # dilation_size = 1
+        # kernel = np.ones((2 * dilation_size + 1, 2 * dilation_size + 1), np.uint8)
+        # self.occupancy_grid = cv2.dilate(self.occupancy_grid.astype(np.uint8), kernel, iterations=1)
+        # self.occupancy_grid = self.occupancy_grid.astype(np.int8)
 
         og = OccupancyGrid()
         og.header.frame_id = "map"
 
         int_grid = self.occupancy_grid.astype(np.int8)
         og.data = np.ravel(int_grid, order='C').tolist()
+        # og.data = np.ravel(self.occupancy_grid, order='C').tolist() # if use Dilation
 
         og.info.origin = self.pose
         vec_length = math.sqrt((self.occupancy_grid.shape[1] // 2 * self.resolution) ** 2 + 

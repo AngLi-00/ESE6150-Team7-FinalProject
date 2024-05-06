@@ -31,8 +31,8 @@ def process_occ_grid(occupancy_grid, resolution, ranges, angles, m_ranges, m_ang
     ym_coords = ym_coords.astype(np.int64)
 
     # Fill In OG
-    # occupancy_grid.fill(-1)
-    occupancy_grid.fill(0)
+    occupancy_grid.fill(-1)
+    # occupancy_grid.fill(0) # if use Dilation
 
     origin = (occupancy_grid.shape[1] // 2, occupancy_grid.shape[0] // 2)
 
