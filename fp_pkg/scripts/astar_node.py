@@ -173,8 +173,8 @@ class Astar(Node):
         angle = math.atan2((self.current_posY - y_w), (self.current_posX - x_w))
         angle -= self.current_theta
 
-        x_og = math.floor(self.width // 2 - dist * math.cos(angle))
-        y_og = math.floor(self.height // 2 - dist * math.sin(angle))
+        x_og = math.floor(self.height // 2 - dist * math.sin(angle))
+        y_og = math.floor(self.width // 2 - dist * math.cos(angle))
 
         return x_og, y_og
     
@@ -196,7 +196,7 @@ class Astar(Node):
         dist_x = x_diff * self.resolution
         dist_y = y_diff * self.resolution
 
-        x_w = self.current_posX + (dist_x * math.cos(self.current_theta) + dist_y * math.sin(self.current_theta))
+        x_w = self.current_posX + (dist_x * math.cos(self.current_theta) - dist_y * math.sin(self.current_theta))
         y_w = self.current_posY + (dist_x * math.sin(self.current_theta) + dist_y * math.cos(self.current_theta))
 
         return x_w, y_w
