@@ -9,7 +9,7 @@ from geometry_msgs.msg import PoseStamped
 from tf_transformations import euler_from_quaternion
 from visualization_msgs.msg import Marker, MarkerArray
 
-from heapq import heappop, heappush
+import heapq
 import math
 
 class Astar(Node):
@@ -62,16 +62,22 @@ class Astar(Node):
         self.height = msg.info.height # 36
         grid = np.array(msg.data).reshape((self.height, self.width))
         
-        # #print occupied cells
-        # print("occ", np.argwhere(grid == 1))
+        #print occupied cells
+        # print("occ", np.argwhere(grid == 1).shape)
+        #print unknown cells
+        # print("unk", np.argwhere(grid == -1).shape)
+        #print free cells
+        # print("free", np.argwhere(grid == 0))
+        
 
         start_point = [18,50]
-        goal_point = [18,99]
+        goal_point = [35,99]
         start_point = tuple(start_point)
         goal_point = tuple(goal_point)
 
         #TODO:Searching in Occupancy Grid Frame
         path_og = self.astar_search(grid, start_point, goal_point)
+            
         """
         path_og: list of tuples (y,x) in the occupancy grid frame 
         """
@@ -106,54 +112,48 @@ class Astar(Node):
 
         else:
             print("No path found")
+            
+            # clear published path
+            marker_array = MarkerArray()
+            self.traj_pub.publish(marker_array)
 
     def astar_search(self, grid, start, goal):
+
+
         def heuristic(a, b):
-            return math.sqrt((a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2)
+            return math.sqrt((b[0] - a[0]) ** 2 + (b[1] - a[1]) ** 2)
 
-        neighbors = [(0, 1), (1, 0), (0, -1), (-1, 0), (1, 1), (1, -1), (-1, 1), (-1, -1)]
-        close_set = set()
+        neighbors = [(0, 1), (1, 0), (0, -1), (-1, 0), (1, 1), (-1, -1), (1, -1), (-1, 1)]
+
+        open_list = []
+        heapq.heappush(open_list, (0 + heuristic(start, goal), 0, start))
         came_from = {}
-        gscore = {start: 0}
-        fscore = {start: heuristic(start, goal)}
-        oheap = []
+        g_cost = {start: 0}
 
-        heappush(oheap, (fscore[start], start))
-        
-        while oheap:
-            current = heappop(oheap)[1]
+        while open_list:
+            _, cost, current = heapq.heappop(open_list)
 
             if current == goal:
-                data = []
+                path = []
                 while current in came_from:
-                    data.append(current)
+                    path.append(current)
                     current = came_from[current]
-                # data.append(start) # add start point if needed
-                return data[::-1] # return path in form of a list of np.array (x,y) indices
+                path.append(start)  # optional: add start point
+                path.reverse()  # optional: reverse path
+                return path
 
-            close_set.add(current)
-            for i, j in neighbors:
-                neighbor = current[0] + i, current[1] + j
-                tentative_g_score = gscore[current] + heuristic(current, neighbor)
-                if 0 <= neighbor[0] < grid.shape[0]:
-                    if 0 <= neighbor[1] < grid.shape[1]:
-                        if grid[neighbor[0]][neighbor[1]] == 1:
-                            continue
-                    else:
-                        continue
-                else:
-                    continue
-                
-                if neighbor in close_set and tentative_g_score >= gscore.get(neighbor, 0):
-                    continue
-                
-                if tentative_g_score < gscore.get(neighbor, float('inf')) or neighbor not in [i[1]for i in oheap]:
-                    came_from[neighbor] = current
-                    gscore[neighbor] = tentative_g_score
-                    fscore[neighbor] = tentative_g_score + heuristic(neighbor, goal)
-                    heappush(oheap, (fscore[neighbor], neighbor))
-                    
-        return False
+            for dx, dy in neighbors:
+                neighbor = (current[0] + dx, current[1] + dy)
+                if 0 <= neighbor[0] < self.height and 0 <= neighbor[1] < self.width and grid[neighbor[0]][neighbor[1]] == 0: # Check if neighbor is within bounds and is free
+                    tentative_g_cost = g_cost[current] + heuristic(current, neighbor)
+
+                    if neighbor not in g_cost or tentative_g_cost < g_cost[neighbor]:
+                        g_cost[neighbor] = tentative_g_cost
+                        f_cost = tentative_g_cost + heuristic(neighbor, goal)
+                        heapq.heappush(open_list, (f_cost, tentative_g_cost, neighbor))
+                        came_from[neighbor] = current
+
+        return False  # No path found
     
     def world_to_og_coords(self, x_w, y_w):
         """
@@ -173,8 +173,8 @@ class Astar(Node):
         angle = math.atan2((self.current_posY - y_w), (self.current_posX - x_w))
         angle -= self.current_theta
 
-        x_og = math.floor(self.width // 2 - dist * math.cos(angle))
-        y_og = math.floor(self.height // 2 - dist * math.sin(angle))
+        x_og = math.floor(self.height // 2 - dist * math.sin(angle))
+        y_og = math.floor(self.width // 2 - dist * math.cos(angle))
 
         return x_og, y_og
     
@@ -196,7 +196,7 @@ class Astar(Node):
         dist_x = x_diff * self.resolution
         dist_y = y_diff * self.resolution
 
-        x_w = self.current_posX + (dist_x * math.cos(self.current_theta) + dist_y * math.sin(self.current_theta))
+        x_w = self.current_posX + (dist_x * math.cos(self.current_theta) - dist_y * math.sin(self.current_theta))
         y_w = self.current_posY + (dist_x * math.sin(self.current_theta) + dist_y * math.cos(self.current_theta))
 
         return x_w, y_w
