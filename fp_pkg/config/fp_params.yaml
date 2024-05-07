@@ -1,0 +1,17 @@
+# Kp: 0.35
+# Kd: 0.12
+# L: 1.2
+# L_speed: 0.8
+# speed_min: 1.0
+# speed_max: 5.0
+# speed_min_linear: 0.8
+# speed_max_linear: 4.5
+
+Kp: 0.35
+Kd: 0.12
+L: 1.2
+L_speed: 0.8
+speed_min: 1.0
+speed_max: 3.0
+speed_min_linear: 0.8
+speed_max_linear: 4.5

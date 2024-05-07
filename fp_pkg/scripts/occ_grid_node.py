@@ -41,8 +41,9 @@ class OG(Node):
         self.og_pub_ = self.create_publisher(OccupancyGrid, '/og', 10)
 
         # class attributes
-        # self.occupancy_grid = np.ones((36, 100)) * -1.0
-        self.occupancy_grid = np.zeros((36, 100), dtype=np.uint8)
+        self.occupancy_grid = np.ones((36, 100)) * -1.0
+        self.dilate_occupancy_grid = np.zeros((36, 100))
+
         self.lidar_max = 6.0
         self.resolution = 0.1
         self.angle_min = 0.0
@@ -66,9 +67,17 @@ class OG(Node):
 
         ranges, angles, mr, ma = self.preprocess_lidar(scan_msg.ranges)
 
-        self.occupancy_grid = process_occ_grid(self.occupancy_grid, self.resolution, ranges, angles, mr, ma)
+        self.occupancy_grid = process_occ_grid(self.occupancy_grid, self.resolution, ranges, angles, mr, ma, False)
+        self.dilate_occupancy_grid = process_occ_grid(self.dilate_occupancy_grid, self.resolution, ranges, angles, mr, ma, True)
 
-
+        # Dilation
+        dilation_size = 2
+        kernel = np.ones((2 * dilation_size + 1, 2 * dilation_size + 1), np.uint8)
+        self.dilate_occupancy_grid = cv2.dilate(self.dilate_occupancy_grid.astype(np.uint8), kernel, iterations=1)
+        self.dilate_occupancy_grid = self.dilate_occupancy_grid.astype(np.int8)
+        # copy the dilated occupied part to the occupancy grid
+        self.occupancy_grid[np.where(self.dilate_occupancy_grid == 1)] = 1
+        self.occupancy_grid = self.occupancy_grid.astype(np.int8)
 
         self.occ_grid() # Publish the occupancy grid
 
@@ -96,19 +105,11 @@ class OG(Node):
 
         if self.pose is None:
             return
-        
-        # # Dilation
-        # dilation_size = 1
-        # kernel = np.ones((2 * dilation_size + 1, 2 * dilation_size + 1), np.uint8)
-        # self.occupancy_grid = cv2.dilate(self.occupancy_grid.astype(np.uint8), kernel, iterations=1)
-        # self.occupancy_grid = self.occupancy_grid.astype(np.int8)
 
         og = OccupancyGrid()
         og.header.frame_id = "map"
 
-        int_grid = self.occupancy_grid.astype(np.int8)
-        og.data = np.ravel(int_grid, order='C').tolist()
-        # og.data = np.ravel(self.occupancy_grid, order='C').tolist() # if use Dilation
+        og.data = np.ravel(self.occupancy_grid, order='C').tolist() 
 
         og.info.origin = self.pose
         vec_length = math.sqrt((self.occupancy_grid.shape[1] // 2 * self.resolution) ** 2 + 
@@ -120,7 +121,6 @@ class OG(Node):
         vec_angle = to_center_angle + self.theta
         og.info.origin.position.x = self.pose.position.x - vec_length * math.cos(vec_angle)
         og.info.origin.position.y = self.pose.position.y - vec_length * math.sin(vec_angle)
-        # print("origin:", og.info.origin.position.x, og.info.origin.position.y)
 
         og.info.width = self.occupancy_grid.shape[1]
         og.info.height = self.occupancy_grid.shape[0]
