@@ -179,11 +179,12 @@ class PurePursuit(Node):
         euler = euler_from_quaternion(quat)
         theta = euler[2]
 
-        if self.np_waypoints is not None:
+        if self.np_waypoints is not None and self.np_waypoints.size > 1:
+            # print("Waypoints received")
 
             lookahead_pos = (posX + self.L*math.cos(theta), posY + self.L*math.sin(theta))
             np_current_pos = np.zeros_like(self.np_waypoints)
-            print("np_current_pos: ", np_current_pos)
+
             np_current_pos[:, 0] = lookahead_pos[0]
             np_current_pos[:, 1] = lookahead_pos[1]
             dist = np.linalg.norm(self.np_waypoints - np_current_pos, axis=1)

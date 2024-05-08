@@ -62,15 +62,23 @@ class Astar(Node):
         self.height = msg.info.height # 36
         grid = np.array(msg.data).reshape((self.height, self.width))
         
-        #print occupied cells
-        # print("occ", np.argwhere(grid == 1).shape)
-        #print unknown cells
-        # print("unk", np.argwhere(grid == -1).shape)
-        #print free cells
-        # print("free", np.argwhere(grid == 0))
+        #find free cells in [0:,50:]
+        free_cells = np.argwhere(grid == 0)
+        free_cells = free_cells[free_cells[:, 1] >= 50]
+        if free_cells.size == 0:
+            # print("No free cells found")
+            self.publish_path([])
+            return
+        else:
+            # print("Free cells found")
+            #find all free cells which have biggest colomn) in [0:,50:]
+            farthest = np.argmax(free_cells[:, 1])
+            farthest_col = free_cells[farthest][1]
+            sample_range = free_cells[free_cells[:, 1] >= farthest_col - 15]
+            goal_point = sample_range[np.random.choice(sample_range.shape[0])]
         
         start_point = [18,50]
-        goal_point = [35,70]
+        # goal_point = [35,70]
         start_point = tuple(start_point)
         goal_point = tuple(goal_point)
 
