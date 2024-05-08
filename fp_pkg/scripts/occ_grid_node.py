@@ -8,13 +8,17 @@ from sensor_msgs.msg import LaserScan
 from geometry_msgs.msg import PoseStamped
 from nav_msgs.msg import Odometry
 from nav_msgs.msg import OccupancyGrid
+from sensor_msgs.msg import Image
 
 from tf_transformations import euler_from_quaternion
-from fp_pkg.og_process import process_occ_grid
+from fp_pkg.og_process import process_occ_grid, process_og_cam
+from fp_pkg.distance import get_green_coords, get_unknown_coords_batch
+
+from cv_bridge import CvBridge
 
 import cv2
 
-# class def for RRT
+
 class OG(Node):
     def __init__(self):
        
@@ -27,6 +31,8 @@ class OG(Node):
             pose_topic = 'pf/viz/inferred_pose'
         else:
             pose_topic = '/ego_racecar/odom'
+
+        image_topic = "/cam_frame"
         
 
         # Create subscribers
@@ -36,6 +42,16 @@ class OG(Node):
         self.pose_sub_ = self.create_subscription(PoseStamped if not self.sim else Odometry, 
                                                   pose_topic, self.pose_callback, 1)
         self.pose_sub_
+
+        self.subscription = self.create_subscription(Image, image_topic, self.img_callback, 10)
+        self.subscription 
+        self.br = CvBridge()
+
+        self.camera_matrix = np.array([[694.71543087,   0,         449.37540769],
+                                       [0,         695.5496121,  258.64705735],
+                                       [0,           0,           1,        ]])
+        
+        self.h_mount = 0.13477281192899426
 
         # Publishers
         self.og_pub_ = self.create_publisher(OccupancyGrid, '/og', 10)
@@ -79,7 +95,7 @@ class OG(Node):
         self.occupancy_grid[np.where(self.dilate_occupancy_grid == 1)] = 1
         self.occupancy_grid = self.occupancy_grid.astype(np.int8)
 
-        self.occ_grid() # Publish the occupancy grid
+        self.occ_grid_viz() # Publish the occupancy grid
 
     def preprocess_lidar(self, ranges):
         """ Preprocess the LiDAR scan array. Expert implementation includes:
@@ -101,17 +117,20 @@ class OG(Node):
         
         return proc_ranges, proc_angles, maxed_ranges, maxed_angles
     
-    def occ_grid(self):
+    def occ_grid_viz(self):
 
         if self.pose is None:
-            return
+            ps = PoseStamped()
+            pose = ps.pose
+        else:
+            pose = self.pose
 
         og = OccupancyGrid()
         og.header.frame_id = "map"
 
         og.data = np.ravel(self.occupancy_grid, order='C').tolist() 
 
-        og.info.origin = self.pose
+        og.info.origin = pose
         vec_length = math.sqrt((self.occupancy_grid.shape[1] // 2 * self.resolution) ** 2 + 
                                 (self.occupancy_grid.shape[0] // 2 * self.resolution) ** 2)
         
@@ -119,14 +138,36 @@ class OG(Node):
                                      (self.occupancy_grid.shape[1] // 2 * self.resolution))
         
         vec_angle = to_center_angle + self.theta
-        og.info.origin.position.x = self.pose.position.x - vec_length * math.cos(vec_angle)
-        og.info.origin.position.y = self.pose.position.y - vec_length * math.sin(vec_angle)
+        og.info.origin.position.x = pose.position.x - vec_length * math.cos(vec_angle)
+        og.info.origin.position.y = pose.position.y - vec_length * math.sin(vec_angle)
 
         og.info.width = self.occupancy_grid.shape[1]
         og.info.height = self.occupancy_grid.shape[0]
         og.info.resolution = self.resolution
 
         self.og_pub_.publish(og)
+
+        return
+    
+    def img_callback(self, data):
+        current_frame = self.br.imgmsg_to_cv2(data)
+
+        green_pix = get_green_coords(current_frame)
+        x_points, y_points = get_unknown_coords_batch(green_pix, self.camera_matrix, self.h_mount)
+
+        self.occupancy_grid = process_og_cam(self.occupancy_grid, self.resolution, x_points, y_points, False)
+        self.dilate_occupancy_grid = process_og_cam(self.dilate_occupancy_grid, self.resolution, x_points, y_points, True)
+
+        # Dilation
+        dilation_size = 2
+        kernel = np.ones((2 * dilation_size + 1, 2 * dilation_size + 1), np.uint8)
+        self.dilate_occupancy_grid = cv2.dilate(self.dilate_occupancy_grid.astype(np.uint8), kernel, iterations=1)
+        self.dilate_occupancy_grid = self.dilate_occupancy_grid.astype(np.int8)
+        # copy the dilated occupied part to the occupancy grid
+        self.occupancy_grid[np.where(self.dilate_occupancy_grid == 1)] = 1
+        self.occupancy_grid = self.occupancy_grid.astype(np.int8)
+
+        self.occ_grid_viz() # Publish the occupancy grid
 
         return
 

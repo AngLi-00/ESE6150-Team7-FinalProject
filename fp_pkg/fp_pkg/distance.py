@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 import numpy as np
 import cv2 as cv
 import glob
@@ -100,37 +102,37 @@ def get_uknown_coord(camera_matrix, H_mount):
     return x_car, y_car
 
 
-def get_yellow_coords(image, min_yellow=(20, 100, 100), max_yellow=(30, 255, 255)):
+def get_green_coords(image, min_green=(30, 50, 50), max_green=(90, 255, 255)):
     '''
-    Gets list of yellow points in image
+    Gets list of green points in image
 
     '''
 
     # Convert image to HSV color space
     hsv_image = cv.cvtColor(image, cv.COLOR_BGR2HSV)
 
-    # Define range of yellow color in HSV
-    lower_yellow = np.array(min_yellow)
-    upper_yellow = np.array(max_yellow)
+    # Define range of green color in HSV
+    lower_green = np.array(min_green)
+    upper_green = np.array(max_green)
 
-    # Threshold the HSV image to get only yellow colors
-    yellow_mask = cv.inRange(hsv_image, lower_yellow, upper_yellow)
+    # Threshold the HSV image to get only green colors
+    green_mask = cv.inRange(hsv_image, lower_green, upper_green)
 
     # Find contours in the mask
-    contours, _ = cv.findContours(yellow_mask, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
+    contours, _ = cv.findContours(green_mask, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
 
-    # Draw yellow points on the original image
-    yellow_points = []
+    # Draw green points on the original image
+    green_points = []
     for contour in contours:
         M = cv.moments(contour)
         if M["m00"] != 0:
             cx = int(M["m10"] / M["m00"])
             cy = int(M["m01"] / M["m00"])
-            yellow_points.append([cx, cy])
+            green_points.append([cx, cy])
     
-    yellow_points = np.array(yellow_points)
+    green_points = np.array(green_points)
 
-    return yellow_points
+    return green_points
 
 def get_unknown_coords_batch(points, camera_matrix, H_mount):
     '''
