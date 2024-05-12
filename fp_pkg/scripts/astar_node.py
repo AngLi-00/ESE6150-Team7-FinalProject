@@ -61,6 +61,7 @@ class Astar(Node):
         self.width = msg.info.width # 100
         self.height = msg.info.height # 36
         grid = np.array(msg.data).reshape((self.height, self.width))
+        cost_grid = self.compute_cost(grid, inflation_radius=1) # If use cost_grid
         
         #find free cells in [0:,50:]
         free_cells = np.argwhere(grid == 0)
@@ -83,7 +84,8 @@ class Astar(Node):
         goal_point = tuple(goal_point)
 
         #TODO:Searching in Occupancy Grid Frame
-        path_og = self.astar_search(grid, start_point, goal_point)
+        # path_og = self.astar_search(grid, start_point, goal_point)
+        path_og = self.astar_search(cost_grid, start_point, goal_point) # If use cost_grid
             
         """
         path_og: list of tuples (y,x) in the occupancy grid frame 
@@ -100,26 +102,11 @@ class Astar(Node):
             print("No path found")
             self.publish_path([])  # Clear the path
 
-
-    # def astar_search(self, grid, start, goal):
-
-    #     # def heuristic(a, b):
-    #         # return math.sqrt((b[0] - a[0]) ** 2 + (b[1] - a[1]) ** 2)
-
-    #     def heuristic(current, goal, min_turn_radius=0.5):
-    #             # use Euclidean distance and curvature cost as heuristic
-    #             straight_distance = math.sqrt((goal[0] - current[0]) ** 2 + (goal[1] - current[1]) ** 2)
-    #             # Assuming that the vehicle needs to turn an angle from the current direction to the target direction, 
-    #             # this angle is calculated by the difference between the target and the current position
-    #             theta = math.atan2(goal[1] - current[1], goal[0] - current[0])
-    #             # The influence of curvature can be simulated by adding a term related to rotation angle. 
-    #             #   Here, we simply multiply the sine value of the distance between the straight line and the angle difference 
-    #             #   to simulate the cost increase when more curvature is required
-    #             curvature_cost = straight_distance * abs(math.sin(theta))
-    #             return straight_distance + min_turn_radius * curvature_cost
+    # def astar_search(self, cost_grid, start, goal):
+    #     def heuristic(a, b):
+    #         return math.sqrt((b[0] - a[0]) ** 2 + (b[1] - a[1]) ** 2)
 
     #     neighbors = [(0, 1), (1, 0), (0, -1), (-1, 0), (1, 1), (-1, -1), (1, -1), (-1, 1)]
-
     #     open_list = []
     #     heapq.heappush(open_list, (0 + heuristic(start, goal), 0, start))
     #     came_from = {}
@@ -127,28 +114,24 @@ class Astar(Node):
 
     #     while open_list:
     #         _, cost, current = heapq.heappop(open_list)
-
     #         if current == goal:
     #             path = []
     #             while current in came_from:
     #                 path.append(current)
     #                 current = came_from[current]
-    #             path.append(start)  # optional: add start point
-    #             path.reverse()  # optional: reverse path
-    #             return path
+    #             path.append(start)
+    #             return path[::-1]
 
     #         for dx, dy in neighbors:
     #             neighbor = (current[0] + dx, current[1] + dy)
-    #             if 0 <= neighbor[0] < self.height and 0 <= neighbor[1] < self.width and grid[neighbor[0]][neighbor[1]] == 0: # Check if neighbor is within bounds and is free
-    #                 tentative_g_cost = g_cost[current] + heuristic(current, neighbor)
-
+    #             if 0 <= neighbor[0] < self.height and 0 <= neighbor[1] < self.width and cost_grid[neighbor[0]][neighbor[1]] == 0:
+    #                 tentative_g_cost = g_cost[current] + heuristic(current, neighbor) + cost_grid[neighbor[0]][neighbor[1]]
     #                 if neighbor not in g_cost or tentative_g_cost < g_cost[neighbor]:
     #                     g_cost[neighbor] = tentative_g_cost
     #                     f_cost = tentative_g_cost + heuristic(neighbor, goal)
     #                     heapq.heappush(open_list, (f_cost, tentative_g_cost, neighbor))
     #                     came_from[neighbor] = current
-
-    #     return False  # No path found
+    #     return False
 
     def compute_cost(self, grid, inflation_radius):
         obstacle_grid = (grid == 1).astype(int)
@@ -180,7 +163,7 @@ class Astar(Node):
 
             for dx, dy in neighbors:
                 neighbor = (current[0] + dx, current[1] + dy)
-                if 0 <= neighbor[0] < self.height and 0 <= neighbor[1] < self.width and cost_grid[neighbor[0]][neighbor[1]] == 0:
+                if 0 <= neighbor[0] < self.height and 0 <= neighbor[1] < self.width and cost_grid[neighbor[0]][neighbor[1]] < np.max(cost_grid):
                     tentative_g_cost = g_cost[current] + heuristic(current, neighbor) + cost_grid[neighbor[0]][neighbor[1]]
                     if neighbor not in g_cost or tentative_g_cost < g_cost[neighbor]:
                         g_cost[neighbor] = tentative_g_cost
